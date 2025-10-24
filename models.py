@@ -1,30 +1,65 @@
+# FILE: models.py
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# A simple MLP (Multi-Layer Perceptron) model for FashionMNIST
-class SimpleMLP(nn.Module):
+# A standalone classifier that can be trained on the server
+class Classifier(nn.Module):
     def __init__(self):
-        super(SimpleMLP, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 256) # Input is a 28x28 image
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3 = nn.Linear(128, 10)      # Output is 10 classes (for 10 types of clothes)
+        super(Classifier, self).__init__()
+        self.fc1 = nn.Linear(32 * 7 * 7, 128)
+        self.classifier = nn.Linear(128, 10)
 
     def forward(self, x):
-        # This function defines how data flows through the model
-        x = x.view(-1, 28 * 28)  # Flatten the image
-        
-        # We'll call this part the "feature extractor"
-        features = F.relu(self.fc1(x))
-        features = F.relu(self.fc2(features))
-        
-        # This part is the "classifier"
-        logits = self.fc3(features)
+        final_features = F.relu(self.fc1(x))
+        logits = self.classifier(final_features)
+        return logits
+
+# Note: The SimpleMLP is no longer used in this experiment, but we can leave it.
+class SimpleMLP(nn.Module):
+    # ... (code for SimpleMLP remains the same) ...
+    def __init__(self):
+        super(SimpleMLP, self).__init__()
+        self.fc1 = nn.Linear(28 * 28, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.classifier = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 28 * 28)
+        features = self.get_features(x)
+        logits = self.classifier(features)
         return logits
         
     def get_features(self, x):
-        # A helper function to get the features from the middle of the model
         x = x.view(-1, 28 * 28)
         features = F.relu(self.fc1(x))
         features = F.relu(self.fc2(features))
+        return features
+
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        # This is the "body" or "feature extractor"
+        self.feature_extractor = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=0),
+            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        )
+        # This is the "head" or "classifier"
+        self.classifier = Classifier()
+
+    def forward(self, x):
+        features = self.feature_extractor(x)
+        features = features.view(-1, 32 * 7 * 7) # Flatten
+        logits = self.classifier(features)
+        return logits
+
+    def get_features(self, x):
+        # The features we extract are now the direct output of the conv layers
+        features = self.feature_extractor(x)
+        features = features.view(-1, 32 * 7 * 7) # Flatten
         return features

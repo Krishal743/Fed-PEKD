@@ -1,31 +1,51 @@
+# FILE: main.py
+
 import copy
+import torch
 from data import get_data
-from models import SimpleMLP
+from models import SimpleCNN, Classifier
 from client import Client
 from server import Server
 
+def evaluate_client(client, test_loader):
+    """Helper function to evaluate a client's model."""
+    client.model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            outputs = client.model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    accuracy = 100 * correct / total
+    print(f"🌍 Global Accuracy on Test Set: {accuracy:.2f}%")
+    return accuracy
+
 if __name__ == '__main__':
-    print("🚀 Starting Fed-PEKD Project - Phase 3...")
+    print("🚀 Starting Fed-PEKD Project - Final Version...")
     
     # --- Configuration ---
     NUM_CLIENTS = 5
-    NUM_ROUNDS = 10 # Let's run for more rounds to see the learning
+    NUM_ROUNDS = 40
     
     # --- Setup ---
     train_loaders, test_loader = get_data(NUM_CLIENTS)
-    global_model = SimpleMLP()
-    server = Server(global_model, test_loader)
     
+    # The server now manages a standalone Classifier model
+    global_classifier = Classifier()
+    server = Server(global_classifier)
+    
+    # Create clients, all with the SimpleCNN model
     clients = []
     for i in range(NUM_CLIENTS):
-        client_model = copy.deepcopy(global_model)
-        client = Client(client_id=i, model=client_model, data_loader=train_loaders[i])
+        client = Client(client_id=i, model=SimpleCNN(), data_loader=train_loaders[i])
         clients.append(client)
         
-    # --- Federated Training with Fed-PEKD ---
+    # --- Federated Training with Corrected Logic ---
     print("\n--- Starting Fed-PEKD Training ---")
     print("Round 0 (Initial Model):")
-    server.evaluate()
+    evaluate_client(clients[0], test_loader)
 
     for round_num in range(1, NUM_ROUNDS + 1):
         print(f"\n--- Round {round_num} ---")
@@ -38,16 +58,15 @@ if __name__ == '__main__':
             knowledge = client.extract_knowledge()
             client_summaries.append(knowledge)
             
-        # 2. Server aggregates knowledge and distills it into the global model
+        # 2. Server aggregates and trains the global classifier
         server.aggregate_and_distill(client_summaries)
         
-        # 3. Server distributes the updated global model to clients for the next round
+        # 3. Server distributes the updated classifier back to ALL clients
         for client in clients:
-            client.model.load_state_dict(server.global_model.state_dict())
+            client.model.classifier.load_state_dict(server.global_classifier.state_dict())
             
-        # 4. Evaluate the improved global model
+        # 4. Evaluate by testing one of the updated clients
         print(f"End of Round {round_num}:")
-        server.evaluate()
+        evaluate_client(clients[0], test_loader)
         
-    print("\n✅ Phase 3 Fed-PEKD Training Complete!")
-    print("Hooray! The global model's accuracy is now improving with each round!")
+    print("\n✅ Fed-PEKD Training Complete!")
