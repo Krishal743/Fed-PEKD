@@ -1,3 +1,5 @@
+# FILE: server.py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -17,40 +19,31 @@ class Server:
         self.test_loader = test_loader
         self.optimizer = optim.Adam(self.global_model.parameters(), lr=0.001)
 
-    def aggregate_and_distill(self, client_summaries, num_samples=500, distill_epochs=2):
+    def aggregate_and_distill(self, client_summaries, num_samples=500, distill_epochs=10):
         """
         The core Fed-PEKD logic: aggregate, generate, and distill.
         """
         # --- 1. Aggregate Knowledge ---
-        # Average the statistics from all clients
         global_mean = torch.stack([s['mean'] for s in client_summaries]).mean(dim=0)
         global_variance = torch.stack([s['variance'] for s in client_summaries]).mean(dim=0)
         global_logits = torch.stack([s['logits'] for s in client_summaries]).mean(dim=0)
         
-        # --- 2. Generate Pseudo-Embeddings [cite: 22, 38] ---
-        # Create "ghost data" from the global statistics
-        # We add a small value to variance to avoid sqrt(0)
+        # --- 2. Generate Pseudo-Embeddings ---
         pseudo_embeddings = global_mean + torch.randn(num_samples, global_mean.shape[0]) * torch.sqrt(global_variance + 1e-8)
-        
-        # The aggregated logits are our "teacher" labels for the ghost data
         teacher_logits = global_logits.unsqueeze(0).repeat(num_samples, 1)
 
-        # --- 3. Distill Knowledge [cite: 23] ---
-        # Train the global model on the ghost data
+        # --- 3. Distill Knowledge ---
         self.global_model.train()
         for _ in range(distill_epochs):
             self.optimizer.zero_grad()
             
-            # We only need to pass the embeddings through the final layers (classifier)
-            student_logits = self.global_model.fc3(pseudo_embeddings)
+            # ** THIS IS THE CORRECTED LINE **
+            student_logits = self.global_model.classifier(pseudo_embeddings)
             
-            # Calculate the distillation loss
             loss = kd_loss(student_logits, teacher_logits)
             
             loss.backward()
             self.optimizer.step()
-        
-        # print("Server finished knowledge distillation.")
         
     def evaluate(self):
         """
