@@ -17,14 +17,36 @@ class Server:
 
     def aggregate_and_distill(self, client_knowledge, distill_epochs=10):
         """
-        Aggregates real embeddings from clients and trains the classifier.
+        Aggregates embeddings and logits using confidence-based weighting.
         """
-        # --- 1. Aggregate Knowledge ---
-        # Gather all features and logits from all clients
-        aggregated_features = torch.cat([k['features'] for k in client_knowledge])
-        aggregated_logits = torch.cat([k['logits'] for k in client_knowledge])
+        # --- 1. Confidence-Weighted Aggregation ---
+        total_confidence = sum(k['confidence'] for k in client_knowledge)
+        
+        # If total_confidence is zero, fall back to equal weighting
+        if total_confidence == 0:
+            total_confidence = len(client_knowledge)
+        
+        weighted_features = []
+        weighted_logits = []
+        
+        for k in client_knowledge:
+            weight = k['confidence'] / total_confidence
+            # Note: We need to scale the number of samples by the weight
+            num_samples = k['features'].shape[0]
+            weighted_num_samples = int(num_samples * weight * len(client_knowledge))
+            
+            if weighted_num_samples > 0:
+                 weighted_features.append(k['features'][:weighted_num_samples])
+                 weighted_logits.append(k['logits'][:weighted_num_samples])
 
-        # Create a simple dataset and loader for training
+        if not weighted_features:
+            print("Warning: No features to aggregate after weighting. Skipping round.")
+            return
+
+        aggregated_features = torch.cat(weighted_features)
+        aggregated_logits = torch.cat(weighted_logits)
+
+        # Create a dataset for distillation
         distill_dataset = torch.utils.data.TensorDataset(aggregated_features, aggregated_logits)
         distill_loader = torch.utils.data.DataLoader(distill_dataset, batch_size=64, shuffle=True)
 
@@ -33,9 +55,7 @@ class Server:
         for _ in range(distill_epochs):
             for features, teacher_logits in distill_loader:
                 self.optimizer.zero_grad()
-                
                 student_logits = self.global_classifier(features)
-                
                 loss = kd_loss(student_logits, teacher_logits)
                 loss.backward()
                 self.optimizer.step()
