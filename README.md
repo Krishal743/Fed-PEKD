@@ -1,4 +1,6 @@
 # Fed-PEKD: Federated Pseudo-Embedding Knowledge Distillation
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+
 
 This repository contains the Python implementation of the Fed-PEKD algorithm, a novel approach to federated learning designed for privacy, communication efficiency, and robustness against non-IID data distributions. 🔐📡📊
 
@@ -51,22 +53,6 @@ Our final, robust `prototype-gmm` method demonstrated a compelling trade-off:
 | Fed-PEKD `real-samples`      | ~61%          | Excellent            | Medium       | Medium        |
 
 **Key Finding:** Fed-PEKD (`prototype-gmm`) achieves **significant accuracy (~70%)** while being **data-free**, **ultra-communication-efficient** (~150x less than FedAvg), and **more stable** than FedAvg, although it showed sensitivity to extreme data sparsity in earlier tests (`alpha=1.0`). It clearly **outperforms** the less private `real-samples` baseline.
-
----
-## 📁 File Structure
-
-fed-pekd/ 
-├── main.py # Main experiment runner (FedAvg & Fed-PEKD) 
-├── client.py # Defines client logic (local train, knowledge extraction) 
-├── server.py # Defines server logic (aggregation, distillation) 
-├── models.py # Defines CNN backbone and Classifier head 
-├── data.py # Handles FashionMNIST loading & Dirichlet splitting 
-├── pseudo_gen.py # Contains GMM generation logic 
-├── evaluate_model.py # Script to load saved models and plot confusion matrix 
-├── plot_results.py # Script to generate comparison plots from CSVs 
-├── results/ # Directory to store output CSVs, plots, and saved models (.pth) 
-└── requirements.txt # Project dependencies
-
 
 ---
 ## ⚙️ Setup
